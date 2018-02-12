@@ -1,2 +1,4 @@
 build
+site_scons/ccglsl
+*.o
 .*
