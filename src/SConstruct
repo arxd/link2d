@@ -1,0 +1,13 @@
+#src
+print(Platform())
+Import('env')
+env = env.Clone()
+
+src = ['gl.c', 'main.c', 'math.c', 'util.c', 'nurbs.c', 'part.c']
+#~ if Platform().name == 'win32':
+	#~ src += ['subproc_w.c', 'share_mem_w.c']
+#~ else:
+	#~ src += ['subproc.c', 'share.c']
+env.GLSL('shaders')
+	
+pixie_exe = env.Program('link2d', src, LIBS=['m', 'GLESv2', 'glfw'])
