@@ -48,10 +48,20 @@ void log_printf(char*level, char *file, int line, const char *fmt, ...);
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 
 void log_printf(char *level, char *file, int line, const char *fmt, ...)
 {
-	fprintf(stderr, "%6s:%20s:%4d: ",level, file, line);
+	char fn[20+1] = {0};
+	int i = strlen(file)-1;
+	int j = 19;
+	int slash_found = 0;
+	while (j >= 0 && i >=0 && (file[i] != '/' || !slash_found)) {
+		slash_found |= (file[i] == '/');
+		fn[j--] = file[i--];
+	}
+	
+	fprintf(stderr, "%6s:%20s:%4d: ",level, &fn[j+1], line);
 	va_list args;
 	va_start (args, fmt);
 	vfprintf (stderr, fmt, args);	

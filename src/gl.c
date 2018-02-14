@@ -1,8 +1,70 @@
 #ifndef GL_C
 #define GL_C
 
+#define KCMD_ESCAPE   (1<<0)
+#define KCMD_ENTER    (1<<1)
+#define KCMD_TAB    (1<<2)
+#define KCMD_BACKSPACE    (1<<3)
+#define KCMD_INSERT    (1<<4)
+#define KCMD_DELETE    (1<<5)
+#define KCMD_RIGHT    (1<<6)
+#define KCMD_LEFT    (1<<7)
+#define KCMD_DOWN    (1<<8)
+#define KCMD_UP    (1<<9)
+#define KCMD_PAGE_UP    (1<<10)
+#define KCMD_PAGE_DOWN    (1<<11)
+#define KCMD_HOME    (1<<12)
+#define KCMD_END    (1<<13)
+#define KCMD_CAPS_LOCK    (1<<14)
+#define KCMD_SCROLL_LOCK    (1<<15)
+#define KCMD_NUM_LOCK    (1<<16)
+#define KCMD_PRINT_SCREEN    (1<<17)
+#define KCMD_PAUSE    (1<<18)
+
+#define KALPHA_A (1<<0)
+#define KALPHA_B (1<<1)
+#define KALPHA_C (1<<2)
+#define KALPHA_D (1<<3)
+#define KALPHA_E (1<<4)
+#define KALPHA_F (1<<5)
+#define KALPHA_G (1<<6)
+#define KALPHA_H (1<<7)
+#define KALPHA_I (1<<8)
+#define KALPHA_J (1<<9)
+#define KALPHA_K (1<<10)
+#define KALPHA_L (1<<11)
+#define KALPHA_M (1<<12)
+#define KALPHA_N (1<<13)
+#define KALPHA_O (1<<14)
+#define KALPHA_P (1<<15)
+#define KALPHA_Q (1<<16)
+#define KALPHA_R (1<<17)
+#define KALPHA_S (1<<18)
+#define KALPHA_T (1<<19)
+#define KALPHA_U (1<<20)
+#define KALPHA_V (1<<21)
+#define KALPHA_W (1<<22)
+#define KALPHA_X (1<<23)
+#define KALPHA_Y (1<<24)
+#define KALPHA_Z (1<<25)
+
+#define KNUM_0 (1<<0)
+#define KNUM_1 (1<<1)
+#define KNUM_2 (1<<2)
+#define KNUM_3 (1<<3)
+#define KNUM_4 (1<<4)
+#define KNUM_5 (1<<5)
+#define KNUM_6 (1<<6)
+#define KNUM_7 (1<<7)
+#define KNUM_8 (1<<8)
+#define KNUM_9 (1<<9)
+
+#ifndef KEY_DEFS_ONLY
+
 #define GLFW_INCLUDE_ES2
 #include <GLFW/glfw3.h>
+
+#define MAX_KEY_INPUT_BUF 64
 
 typedef struct s_Window Window;
 typedef struct s_Shader Shader;
@@ -15,20 +77,31 @@ struct s_Window {
 	GLFWwindow *fs_window;
 	int frame;
 	
+// Screen
 	int w, h;
+	int fs;
+
+//
 	int x, y;
 	
 	int cx, cy;
-	char input_chars[256];
+
+// Keyboard Input
+	char input_chars[MAX_KEY_INPUT_BUF];
 	int input_i;
-	int fs;
+	uint32_t alpha;
+	uint32_t num;
+	uint32_t function;
+	uint32_t cmd;	
+	uint32_t mod;
 	
+// Render State
 	GLfloat color[4];
-	
 	GLfloat camx, camy;
-	GLfloat zoom;
+	GLfloat zoomx, zoomy;
 	GLfloat vmat[3][3];
 
+	
 };
 
 extern Window GW;
@@ -83,12 +156,13 @@ char key_pop(void);
 
 /** ========== Drawing =============
  */
-
+#ifdef GL_DRAWING
 void draw_color(float r, float g, float b, float a);
-void draw_line_strip(int npts, GLfloat *pts);
-void draw_line_loop(int npts, GLfloat *pts);
-void draw_lines(int npts, GLfloat *pts);
-
+void draw_line_strip(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts);
+void draw_line_loop(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts);
+void draw_lines(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts);
+void draw_polygon(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts);
+#endif
 
 #if __INCLUDE_LEVEL__ == 0
 
@@ -100,12 +174,14 @@ void draw_lines(int npts, GLfloat *pts);
 #include <string.h>
 
 #include "logging.c"
-#include "shaders.h"
+//~ #include "shaders.h"
 
 Window GW;
 
-extern void gl_frame(void);
+extern int gl_frame(void);
 extern void gl_init(void);
+extern int main_init(int argc, char *argv[]);
+
 extern const char *gl_name;
 
 void gl_error_check(void)
@@ -304,6 +380,7 @@ char key_pop(void)
 {
 	if (GW.input_i)
 		return GW.input_chars[--GW.input_i];
+	return 0;
 }
 
 
@@ -425,7 +502,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 }
 void character_callback(GLFWwindow* window, unsigned int codepoint)
 {	
-	if (codepoint > 0 && codepoint <='~' && GW.input_i < 256)
+	if (codepoint > 0 && codepoint <='~' && GW.input_i < MAX_KEY_INPUT_BUF)
 		GW.input_chars[GW.input_i++] = codepoint;
 }
 
@@ -435,58 +512,80 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		do_fullscreen();
 		return;
 	}
-	if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE) {
-		//input->status |= STATUS_CLOSE;
-		return;
-	}
-	
 
-	//~ if ((action == GLFW_PRESS || action == GLFW_REPEAT) && GW.input_i < 16) {
-		//~ switch (key) {
-			//~ case GLFW_KEY_ENTER: GW.input_chars[GW.input_i++] = '\n'; break;
-			//~ case GLFW_KEY_TAB: GW.input_chars[GW.input_i++] = '\t'; break;
-			//~ case GLFW_KEY_BACKSPACE: GW.input_chars[GW.input_i++] = '\b'; break;
-			//~ default:break;
-		//~ }
-	//~ }
-	//~ uint32_t *bitfield = 0;
-	//~ int bit = 0;
-	//~ if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
-		//~ bit = key - GLFW_KEY_A;
-		//~ bitfield = &input->alpha;
-	//~ } else if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F16) {
-		//~ bit = key - GLFW_KEY_F1;
-		//~ bitfield = &input->function;
-	//~ } else if (key >= GLFW_KEY_0   && key <= GLFW_KEY_9) {
-		//~ bit = key - GLFW_KEY_0;
-		//~ bitfield = &input->num;
-	//~ } else if (key >= GLFW_KEY_KP_0   && key <= GLFW_KEY_KP_9) {
-		//~ bit = key - GLFW_KEY_KP_0 + 16;
-		//~ bitfield = &input->num;
-	//~ }
-	//~ if (bitfield) {
-		//~ if (action == GLFW_PRESS)
-			//~ *bitfield |= 1<<bit;
-		//~ else if (action == GLFW_RELEASE)
-			//~ *bitfield &= ~(1<<bit);
-	//~ }	
+	if ((action == GLFW_PRESS || action == GLFW_REPEAT) && GW.input_i < MAX_KEY_INPUT_BUF) {
+		switch (key) {
+			case GLFW_KEY_ENTER: GW.input_chars[GW.input_i++] = '\n'; break;
+			case GLFW_KEY_TAB: GW.input_chars[GW.input_i++] = '\t'; break;
+			case GLFW_KEY_BACKSPACE: GW.input_chars[GW.input_i++] = '\b'; break;
+			default:break;
+		}
+	}
+	uint32_t *bitfield = 0;
+	int bit = 0;
+	if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
+		bit = key - GLFW_KEY_A;
+		bitfield = &GW.alpha;
+	} else if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F16) {
+		bit = key - GLFW_KEY_F1;
+		bitfield = &GW.function;
+	} else if (key >= GLFW_KEY_0   && key <= GLFW_KEY_9) {
+		bit = key - GLFW_KEY_0;
+		bitfield = &GW.num;
+	} else if (key >= GLFW_KEY_KP_0   && key <= GLFW_KEY_KP_9) {
+		bit = key - GLFW_KEY_KP_0 + 16;
+		bitfield = &GW.num;
+	} else if (key >= GLFW_KEY_ESCAPE && key <= GLFW_KEY_PAUSE) {
+		bit = key - GLFW_KEY_ESCAPE;
+		bitfield = &GW.cmd;
+	}
+	if (bitfield) {
+		if (action == GLFW_PRESS)
+			*bitfield |= 1<<bit;
+		else if (action == GLFW_RELEASE)
+			*bitfield &= ~(1<<bit);
+	}	
 }
 
+#ifdef GL_DRAWING
 Shader g_line_shader = {0};
 GLuint g_line_vb=0;
+#endif
 
 void helper_gl_init(void)
 {
+#ifdef GL_DRAWING
 	if (!g_line_shader.id) {
-		ASSERT(shader_init(&g_line_shader, V_STRAIGHT, F_SOLID, (char*[]){
-			"aPos", "uScreen", "uColor", NULL}), "Couldn't create g_line_shader shader");
+		ASSERT(shader_init(&g_line_shader, "#version 100\n\
+precision mediump float;\n\
+attribute vec2 aPos;\n\
+uniform vec2 uScale;\n\
+uniform vec2 uTranslate;\n\
+uniform mat3 uScreen;\n\
+uniform float uAngle;\n\
+void main()\n\
+{\n\
+	float c = cos(uAngle);\n\
+	float s = sin(uAngle);\n\
+	vec2 pos2 = mat2(c, s, -s, c)*(aPos*uScale)+uTranslate;\n\
+	vec3 pos = uScreen*vec3(pos2, 1.0);\n\
+	gl_Position = vec4(pos.xy, 0.0, 1.0);\n\
+}"
+		, "#version 100\n\
+			precision mediump float;\n\
+			uniform vec4 uColor;\n\
+			void main(){gl_FragColor = uColor;}",
+			(char*[]){"aPos", "uScreen","uTranslate", "uScale",  "uAngle", "uColor",  NULL}
+		), "Couldn't create g_line_shader shader");
 		on_exit(shader_on_exit, &g_line_shader);
 	}
 	glDeleteBuffers(1, &g_line_vb);
 	glGenBuffers(1, &g_line_vb);
-	
+#endif
 
 }
+
+#ifdef GL_DRAWING
 
 void draw_color(float r, float g, float b, float a)
 {
@@ -497,9 +596,10 @@ void draw_color(float r, float g, float b, float a)
 	
 }
 
-void drawl(GLenum mode, int npts, GLfloat *pts)
+void drawl(GLenum mode, GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts)
 {
-	//~ DEBUG("%d %d %f\n", g_line_shader.id, npts, pts[0]);
+
+//~ DEBUG("%d %d %f\n", g_line_shader.id, npts, pts[0]);
 	glUseProgram(g_line_shader.id);
 	glBindBuffer(GL_ARRAY_BUFFER, g_line_vb);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 2*npts, pts, GL_STATIC_DRAW);
@@ -510,34 +610,36 @@ void drawl(GLenum mode, int npts, GLfloat *pts)
 	//~ GW.color = (GLfloat[4]){1.0, 1.0, 0.0, 1.0};
 	
 	glUniformMatrix3fv(g_line_shader.args[1], 1, 1, &GW.vmat[0][0]);// uScreen
-	glUniform4fv(g_line_shader.args[2], 1, GW.color); //uColor
+	glUniform2fv(g_line_shader.args[2],1, xy); // uTranslate
+	glUniform2fv(g_line_shader.args[3],1, scale); //uScale
+	glUniform1f(g_line_shader.args[4], angle*M_PI/180.0); //uScale
+	glUniform4fv(g_line_shader.args[5], 1, GW.color); //uColor
 	glDrawArrays(mode, 0, npts);
 }
-void draw_line_strip(int npts, GLfloat *pts)
+void draw_line_strip(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts)
 {
-	drawl(GL_LINE_STRIP, npts, pts);
+	drawl(GL_LINE_STRIP, xy, scale, angle, npts, pts);
 }
-void draw_line_loop(int npts, GLfloat *pts)
+void draw_line_loop(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts)
 {
-	drawl(GL_LINE_LOOP, npts, pts);
+	drawl(GL_LINE_LOOP, xy, scale, angle, npts, pts);
 }
-void draw_lines(int npts, GLfloat *pts)
+void draw_lines(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts)
 {
-	drawl(GL_LINES, npts, pts);
+	drawl(GL_LINES, xy, scale, angle, npts, pts);
 }
+void draw_polygon(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts)
+{
+	drawl(GL_TRIANGLE_FAN, xy, scale, angle, npts, pts);
+}
+#endif
 
 void set_window(GLFWwindow *w)
 {
 	GW.window = w;
 	glfwMakeContextCurrent(GW.window);
 
-	//~ init_gl();
-	//~ glfwSwapInterval(0);
-	//~ glfwSetWindowAspectRatio(gw.window, 16, 9);
-	//~ glfwSetWindowSizeLimits(gw.window, 256, 144, GLFW_DONT_CARE, GLFW_DONT_CARE);
 	glfwSetFramebufferSizeCallback(GW.window, framebuffer_size_callback);
-	//~ glfwSetKeyCallback(window, key_callback);
-	//~ glfwSetInputMode(window, GLFW_STICKY_MOUSE_BUTTONS, 1);
 	glfwSetKeyCallback(GW.window, key_callback);
 	glfwSetCharCallback(GW.window, character_callback);
 	glfwSetCursorPosCallback(GW.window, cursor_position_callback);
@@ -547,19 +649,9 @@ void set_window(GLFWwindow *w)
 	int width, height;
 	glfwGetFramebufferSize(GW.window, &width, &height);
 	framebuffer_size_callback(GW.window, width, height);
-	gl_init();
 	helper_gl_init();
+	gl_init();
 	XINFO("Initialization Complete");
-	// set up a framebuffer for this new context
-	//~ if (gw.fbobj)
-		//~ ABORT(9, "fbobj should have been released");
-	//~ glGenFramebuffers(1, &gw.fbobj);
-	//~ glBindFramebuffer(GL_FRAMEBUFFER, gw.fbobj);
-	//~ glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gw.fbtex, 0);
-	//~ if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		//~ fprintf(stderr, "Couldn't get framebuffer (%d) ready! %d %d %d %d\n", gw.fbobj, glCheckFramebufferStatus(GL_FRAMEBUFFER),
-		//~ GL_FRAMEBUFFER_COMPLETE, GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT,GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS);
-	//~ glBindFramebuffer(GL_FRAMEBUFFER, 0); // put the default framebuffer back
 }
 
 static void error_callback(int error, const char* description)
@@ -582,17 +674,11 @@ void win_on_exit(int status, void *arg)
 	memset(&GW, 0, sizeof(Window));
 }
 
-int pre_window_init(void)
-{
-	memset(&GW, 0, sizeof(Window));
-	GW.zoom = 1.0;	
-	
-	return 1;
-}
-
 int main(int argc, char *argv[])
 {
-	ASSERT(pre_window_init(), "pre_window_init");
+	memset(&GW, 0, sizeof(Window));
+	GW.zoomx = GW.zoomy = 1.0;	
+	ASSERT(main_init(argc, argv) == 0, "main_init");
 	
 	glfwSetErrorCallback(error_callback);
 	ASSERT(glfwInit(), "glfwinit");
@@ -612,13 +698,14 @@ int main(int argc, char *argv[])
 	glfwSetTime (0.0);
 	while(!glfwWindowShouldClose(GW.window)) {
 		glfwPollEvents();
-		GW.vmat[0][0] = 2.0*GW.zoom / GW.w;
-		GW.vmat[1][1] = 2.0*GW.zoom / GW.h;
+		GW.vmat[0][0] = 2.0*GW.zoomx / GW.w;
+		GW.vmat[1][1] = 2.0*GW.zoomy / GW.h;
 		GW.vmat[2][2] = 1.0;
 		GW.vmat[0][2] = GW.camx / GW.w;
 		GW.vmat[1][2] = GW.camy / GW.h;
 		
-		gl_frame();
+		if (!gl_frame())
+			break;
 		++GW.frame;
 		glfwSwapBuffers(GW.window);
 	}
@@ -628,5 +715,5 @@ int main(int argc, char *argv[])
 
 #endif
 #endif
-
+#endif
 
