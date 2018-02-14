@@ -1,4 +1,5 @@
 //~ #include <math.h>
+#include <malloc.h>
 #include "logging.c"
 #include "gl.c"
 #include "math.c"
@@ -19,16 +20,37 @@ V2 A1_pts[] = {
 
 float heart_pathlen;
 
-#define X0 (heart[i*2+2])
-#define X1 (heart[i*2+4])
-#define Y0 (heart[i*2+3])
-#define Y1 (heart[i*2+5])
-#define X(t) (X0 + t*(X1-X0))
-#define Y(t) (Y0 + t*(Y1-Y0))
-//~ float seglen(float x0, float y0, float x1, float y1)
-//~ {
-	//~ return sqrt((x1-x0)*(x1-x0) + (y1-y0)*(y1-y0) );
-//~ }
+	
+typedef struct s_Path Path;
+struct s_Path {
+	int npts;
+	V2 *pts;
+};
+
+void path_init(Path *self, V2 p0, V2 p1)
+{
+	self->pts = (V2*)malloc(sizeof(V2) * 2);
+	self->npts = 2;
+}
+
+void path_free(Path *path)
+{
+	if (path->pts)
+		free(path->pts);
+	memset(path, 0, sizeof(Path));	
+}
+
+float path_length(Path *path)
+{
+	float len = 0.0;
+	for (int i=1; i < path->npts; ++i)
+		len += v2dist(path->pts[i], path->pts[-1]);
+	return len;
+}
+
+
+	
+	
 #define NHEARTS 8*7
 typedef struct s_Heart Heart;
 struct s_Heart {

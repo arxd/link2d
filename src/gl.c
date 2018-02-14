@@ -609,7 +609,7 @@ void drawl(GLenum mode, GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts
 	//~ GW.vmat = (GLfloat[3][3]){1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
 	//~ GW.color = (GLfloat[4]){1.0, 1.0, 0.0, 1.0};
 	
-	glUniformMatrix3fv(g_line_shader.args[1], 1, 1, &GW.vmat[0][0]);// uScreen
+	glUniformMatrix3fv(g_line_shader.args[1], 1, GL_FALSE, &GW.vmat[0][0]);// uScreen
 	glUniform2fv(g_line_shader.args[2],1, xy); // uTranslate
 	glUniform2fv(g_line_shader.args[3],1, scale); //uScale
 	glUniform1f(g_line_shader.args[4], angle*M_PI/180.0); //uScale
@@ -701,8 +701,8 @@ int main(int argc, char *argv[])
 		GW.vmat[0][0] = 2.0*GW.zoomx / GW.w;
 		GW.vmat[1][1] = 2.0*GW.zoomy / GW.h;
 		GW.vmat[2][2] = 1.0;
-		GW.vmat[0][2] = GW.camx / GW.w;
-		GW.vmat[1][2] = GW.camy / GW.h;
+		GW.vmat[2][0] = GW.camx / GW.w;
+		GW.vmat[2][1] = GW.camy / GW.h;
 		
 		if (!gl_frame())
 			break;
