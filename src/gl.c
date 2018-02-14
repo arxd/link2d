@@ -33,50 +33,62 @@ struct s_Window {
 
 extern Window GW;
 
+
+/** ========== Shaders =============
+ */
+#define MAX_SHADER_ARGS 32
+
 struct s_Shader {
 	GLuint id;
 	GLuint argc;
-	GLuint args[16];
-};
-
-struct s_Texture {
-	GLuint id;
-	int w, h;
-//	GLint internal_format;
-	GLenum format;
-	GLenum type;
-	//~ void *data;
-};
-
-struct s_FrameBuffer {
-	GLuint id;
-	Texture tex;
+	GLuint args[MAX_SHADER_ARGS];
 };
 
 int shader_init(Shader *self, const char *vert_src, const char *frag_src, char *args[]);
 void shader_fini(Shader *self);
 void shader_on_exit(int status, void *arg);
 
-void clear(GLfloat r, GLfloat g, GLfloat b);
+
+/** ========== Textures =============
+ */
+struct s_Texture {
+	GLuint id;
+	int w, h;
+	GLenum format;
+	GLenum type;
+};
+
 void tex_set(Texture *self, void * pixels);
 void tex_on_exit(int status, void *arg);
 void tex_fini(Texture *self);
 
+/** ========== Frame Buffers =============
+ */
 
-void gl_error_check(void);
+struct s_FrameBuffer {
+	GLuint id;
+	Texture tex;
+};
 
 int framebuffer_init(FrameBuffer *self, int w, int h);
 void framebuffer_fini(FrameBuffer *self);
 void framebuffer_on_exit(int status, void *arg);
+
+/** ==========Misc =============
+ */
+
+void gl_error_check(void);
+double time(void);
+char key_pop(void);
+
+/** ========== Drawing =============
+ */
 
 void draw_color(float r, float g, float b, float a);
 void draw_line_strip(int npts, GLfloat *pts);
 void draw_line_loop(int npts, GLfloat *pts);
 void draw_lines(int npts, GLfloat *pts);
 
-double time(void);
-
-char key_pop(void);
 
 #if __INCLUDE_LEVEL__ == 0
 
@@ -87,7 +99,7 @@ char key_pop(void);
 #include <math.h>
 #include <string.h>
 
-#include "util.c"
+#include "logging.c"
 #include "shaders.h"
 
 Window GW;
@@ -96,25 +108,17 @@ extern void gl_frame(void);
 extern void gl_init(void);
 extern const char *gl_name;
 
-
-void clear(GLfloat r, GLfloat g, GLfloat b)
-{
-	glClearColor(r, g , b, 1.0);
-	glClear(GL_COLOR_BUFFER_BIT);
-}
-
 void gl_error_check(void)
 {
 	int err;
-	if ( (err=glGetError()) )
-		ABORT(3, "GL Error %d", err);
+	ASSERT( !(err=glGetError()),  "GL Error %d", err);
 }
 
 void tex_set(Texture *self, void * pixels )
 {
 	if (!self->id) {// create a new texture
 		glGenTextures(1, &self->id);
-		DEBUG("Create texture %d", self->id);
+		XINFO("Create texture %d", self->id);
 		glBindTexture(GL_TEXTURE_2D, self->id);
 		glTexImage2D(GL_TEXTURE_2D, 0, self->format, self->w, self->h, 0, self->format, self->type,  pixels);
 		gl_error_check();
@@ -135,7 +139,7 @@ void tex_set(Texture *self, void * pixels )
 void tex_fini(Texture *self)
 {
 	if (self->id) {
-		DEBUG("Unbind texture %d", self->id);
+		XINFO("Unbind texture %d", self->id);
 		glDeleteTextures(1, &self->id);
 	}
 	self->id = 0;
@@ -161,7 +165,7 @@ int glsl_check(
 		if ( len > 0 ) {
 			char* log = alloca(sizeof(char) * len);
 			get_log(prog, len, NULL, log);
-			printf("Compile Error : %d : %s\n", prog, log);
+			fprintf(stderr, "Compile Error : %d : %s\n", prog, log);
 		}
 		return -1;
 	}
@@ -171,7 +175,7 @@ int glsl_check(
 void shader_fini(Shader *self)
 {
 	if (self->id){
-		DEBUG("Program deleted %d", self->id);
+		XINFO("Program deleted %d", self->id);
 		glDeleteProgram(self->id);
 	}
 	self->id = 0;
@@ -190,7 +194,7 @@ int shader_init(Shader *self, const char *vert_src, const char *frag_src, char *
 	
 	//~ Shader *prog = malloc(sizeof(Shader) + sizeof(GLuint)*argc);
 	//~ prog->argc = argc;
-	ASSERT (self->argc < 16);
+	DBG_ASSERT (self->argc <= MAX_SHADER_ARGS, "%d args MAX (%d given)",MAX_SHADER_ARGS, self->argc);
 
 	GLuint vert_shader, frag_shader;
 	// Compile Vertex Shader
@@ -228,7 +232,7 @@ int shader_init(Shader *self, const char *vert_src, const char *frag_src, char *
 				//~ glEnableVertexAttribArray(prog->args[a]);
 			break;
 			case 'u': self->args[a] = glGetUniformLocation(self->id, args[a]); break;
-			default: printf("WARNING: Must be attribute or uniform: %s",args[a]); break;
+			default: ABORT("Must be attribute or uniform: %s",args[a]); break;
 		}
 	}
 	
@@ -238,7 +242,7 @@ int shader_init(Shader *self, const char *vert_src, const char *frag_src, char *
 	//~ if(glsl_check(glGetProgramiv,  glGetProgramInfoLog, prog->id, GL_VALIDATE_STATUS))
 		//~ return NULL;
 
-	DEBUG("Program compiled %d", self->id);
+	XINFO("Program compiled %d", self->id);
 	return 1;
 }
 
@@ -247,7 +251,7 @@ int framebuffer_init(FrameBuffer *self, int w, int h)
 	if (self->id) {// releaase the old framebuffer
 		glDeleteFramebuffers(1, &self->id);
 	} else { // this is the first time we are called
-		DEBUG("Create New Texture for framebuffer");
+		XINFO("Create New Texture for framebuffer");
 		self->tex.w = w;
 		self->tex.h = h;
 		self->tex.format = GL_RGB;
@@ -256,7 +260,7 @@ int framebuffer_init(FrameBuffer *self, int w, int h)
 	}
 	glGenFramebuffers(1, &self->id);
 	glBindFramebuffer(GL_FRAMEBUFFER, self->id);
-	DEBUG("New FrameBuffer %d", self->id);
+	XINFO("New FrameBuffer %d", self->id);
 	//~ glGenTextures(1, &self->txid);
 	//~ glBindTexture(GL_TEXTURE_2D, self->txid);
 	//~ glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, self->w, self->h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
@@ -268,8 +272,7 @@ int framebuffer_init(FrameBuffer *self, int w, int h)
 	//~ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // only power of 2 textures can be wrapped 
 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self->tex.id, 0);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		ABORT(1, "Framebuffer not ready %d", glCheckFramebufferStatus(GL_FRAMEBUFFER));
+	ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE, "Framebuffer not ready %d", glCheckFramebufferStatus(GL_FRAMEBUFFER));
 	glBindFramebuffer(GL_FRAMEBUFFER, 0); // put the default framebuffer back
 	return 1;
 }
@@ -278,7 +281,7 @@ void framebuffer_fini(FrameBuffer *self)
 {
 	tex_fini(&self->tex);
 	if (self->id) {
-		DEBUG("Delete fb %d", self->id);
+		XINFO("Delete fb %d", self->id);
 		glDeleteFramebuffers(1, &self->id);
 	}
 	memset(self, 0, sizeof(FrameBuffer));
@@ -290,9 +293,6 @@ void framebuffer_on_exit(int status, void *arg)
 }
 
 
-//~ void gl_context_change(void);
-
-//~ Window ;
 
 double time(void)
 {
@@ -300,41 +300,11 @@ double time(void)
 }
 
 
-
-//~ void win_size(int *w, int *h)
-//~ {
-	//~ *w = gw.w;
-	//~ *h = gw.h;
-	//~ glfwGetFramebufferSize(gw.window, w, h);
-//~ }
 char key_pop(void)
 {
 	if (GW.input_i)
 		return GW.input_chars[--GW.input_i];
 }
-
-double win_time(void)
-{
-	return glfwGetTime();
-}
-
-//~ void win_update(void)
-//~ {
-	//~ glfwSwapBuffers(gw.window);
-	//~ glfwPollEvents();
-	//~ if (gw.input_i)
-		//~ input->getchar = gw.input_chars[--gw.input_i];
-	//~ if (glfwWindowShouldClose(gw.window))
-		//~ input->status |= STATUS_CLOSE;
-	
-	//~ int x,y;
-	//~ static int f = 0;
-	//~ ++f;
-	//~ glfwGetWindowPos	(gw.window, &x, &y);
-	//~ if(! (f%30))
-		//~ printf("%d, %d\n", x, y);
-
-//~ }
 
 
 void set_window(GLFWwindow *w);
@@ -349,38 +319,18 @@ GLFWmonitor* cur_monitor(void)
 		int mx, my;
 		glfwGetMonitorPos(monitors[m], &mx, &my);
 		const GLFWvidmode* mode = glfwGetVideoMode(monitors[m]);
-		DEBUG("MONITOR %s: %dx%d (%d, %d) %d", glfwGetMonitorName(monitors[m]), 
+		XINFO("MONITOR %s: %dx%d (%d, %d) %d", glfwGetMonitorName(monitors[m]), 
 			mode->width,mode->height, mx,my, mode->refreshRate);
 		int nmodes;
 		const GLFWvidmode* modes = glfwGetVideoModes(monitors[m], &nmodes);
 		for (int d=0; d < nmodes; ++d)
-			DEBUG ("\t%dx%d %d", modes[d].width, modes[d].height, modes[d].refreshRate);
+			XINFO ("\t%dx%d %d", modes[d].width, modes[d].height, modes[d].refreshRate);
 		
 		if (xpos > mx && ypos > my && xpos < mx+mode->width && ypos < my+mode->height)
 			monitor = monitors[m];
 	}
 	return monitor;
 }
-
-//~ void do_fullscreen2(void)
-//~ {
-	//~ static int xpos, ypos, width, height;
-
-	//~ if (gw.fs) {
-		//~ glfwSetWindowMonitor(gw.window, NULL, xpos, ypos, width, height, 0);
-	//~ } else {
-		//~ glfwGetWindowPos(gw.window, &xpos, &ypos);
-		//~ glfwGetWindowSize(gw.window, &width, &height);
-		//~ // figure out which monitor we are on
-		//~ GLFWmonitor *monitor = cur_monitor();
-		
-		//~ const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-		//~ DEBUG("FS ON %s: %dx%d", glfwGetMonitorName(monitor), mode->width, mode->height);
-		//~ glfwSetWindowMonitor(gw.window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
-	//~ }
-	//~ gw.fs = !gw.fs;
-	
-//~ }
 
 void do_fullscreen(void)
 {
@@ -396,20 +346,20 @@ void do_fullscreen(void)
 		glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
 		glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
 		glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate); 
-		DEBUG("Make fs window %dx%d %d", mode->width, mode->height, mode->refreshRate);
-		GW.fs_window = glfwCreateWindow(mode->width, mode->height, "Glyphy FS", monitor, GW.w_window);
+		XINFO("Make fs window %dx%d %d", mode->width, mode->height, mode->refreshRate);
+		GW.fs_window = glfwCreateWindow(mode->width, mode->height, gl_name, monitor, GW.w_window);
 		if (!GW.fs_window) {
-			fprintf(stderr, "Failed to create a fs window!\n");
+			WARN("Failed to create a fs window!");
 			return;
 		}
 	}
 	if (GW.fs) {
-		DEBUG("go Windowed");
+		XINFO("go Windowed");
 		set_window(GW.w_window);
 		glfwDestroyWindow(GW.fs_window);
 		GW.fs_window = 0;
 	} else {
-		DEBUG("go FS");
+		XINFO("go FS");
 		set_window(GW.fs_window);
 		//glfwHideWindow(gw.w_window);
 	}
@@ -528,9 +478,8 @@ GLuint g_line_vb=0;
 void helper_gl_init(void)
 {
 	if (!g_line_shader.id) {
-		if (!shader_init(&g_line_shader, V_STRAIGHT, F_SOLID, (char*[]){
-			"aPos", "uScreen", "uColor", NULL}))
-			ABORT(1, "Couldn't create g_line_shader shader");
+		ASSERT(shader_init(&g_line_shader, V_STRAIGHT, F_SOLID, (char*[]){
+			"aPos", "uScreen", "uColor", NULL}), "Couldn't create g_line_shader shader");
 		on_exit(shader_on_exit, &g_line_shader);
 	}
 	glDeleteBuffers(1, &g_line_vb);
@@ -600,7 +549,7 @@ void set_window(GLFWwindow *w)
 	framebuffer_size_callback(GW.window, width, height);
 	gl_init();
 	helper_gl_init();
-	DEBUG("Initialization Complete");
+	XINFO("Initialization Complete");
 	// set up a framebuffer for this new context
 	//~ if (gw.fbobj)
 		//~ ABORT(9, "fbobj should have been released");
@@ -615,49 +564,51 @@ void set_window(GLFWwindow *w)
 
 static void error_callback(int error, const char* description)
 {
-	ABORT(100, "GLFW:%d: %s", error, description);
+	ABORT("GLFW:%d: %s", error, description);
 }
 
 void win_on_exit(int status, void *arg)
 {
 	if (GW.fs_window) {
-		DEBUG("Destroy FS window");
+		XINFO("Destroy FS window");
 		glfwDestroyWindow(GW.fs_window);
 	}
 	if (GW.w_window) {
-		DEBUG("Destroy Window");
+		XINFO("Destroy Window");
 		glfwDestroyWindow(GW.w_window);
 	}
-	DEBUG("GLFW Terminate");
+	XINFO("GLFW Terminate");
 	glfwTerminate();
 	memset(&GW, 0, sizeof(Window));
 }
 
-int main(int argc, char *argv[])
+int pre_window_init(void)
 {
 	memset(&GW, 0, sizeof(Window));
-	GW.zoom = 1.0;
+	GW.zoom = 1.0;	
+	
+	return 1;
+}
+
+int main(int argc, char *argv[])
+{
+	ASSERT(pre_window_init(), "pre_window_init");
 	
 	glfwSetErrorCallback(error_callback);
-	if (!glfwInit())
-		ABORT(1, "glfwinit");
+	ASSERT(glfwInit(), "glfwinit");
+	on_exit(win_on_exit, 0);
 	
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 	
 	GW.w_window = glfwCreateWindow(16*32, 9*32, gl_name, NULL, NULL);
-	if (!GW.w_window) {
-		glfwTerminate();
-		ABORT(2, "glfwCreateWindow");
-	}
+	ASSERT(GW.w_window, "create window");
 
 	set_window(GW.w_window);
-	DEBUG("GL_VERSION  : %s", glGetString(GL_VERSION) );
-	DEBUG("GL_RENDERER : %s", glGetString(GL_RENDERER) );
-	
-	on_exit(win_on_exit, 0);
-	
+	XINFO("GL_VERSION  : %s", glGetString(GL_VERSION) );
+	XINFO("GL_RENDERER : %s", glGetString(GL_RENDERER) );
+
 	glfwSetTime (0.0);
 	while(!glfwWindowShouldClose(GW.window)) {
 		glfwPollEvents();
@@ -671,8 +622,8 @@ int main(int argc, char *argv[])
 		++GW.frame;
 		glfwSwapBuffers(GW.window);
 	}
-	ABORT(0, "Goodbye");
-	
+	XINFO("Goodbye");
+	return 0;
 }
 
 #endif

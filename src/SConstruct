@@ -3,7 +3,7 @@ print(Platform())
 Import('env')
 env = env.Clone()
 
-src = ['gl.c', 'main.c', 'math.c', 'util.c', 'nurbs.c', 'part.c']
+src = ['gl.c', 'main.c', 'math.c', 'logging.c', 'nurbs.c', 'part.c']
 #~ if Platform().name == 'win32':
 	#~ src += ['subproc_w.c', 'share_mem_w.c']
 #~ else:
