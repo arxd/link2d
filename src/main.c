@@ -4,6 +4,12 @@
 #include "gl.c"
 #include "math.c"
 
+
+
+
+
+
+
 const char *gl_name = "I Love You";
 V2 heart_pts[] = {
 	{0.0, 0.0},	
@@ -27,29 +33,82 @@ struct s_Path {
 	V2 *pts;
 };
 
-void path_init(Path *self, V2 p0, V2 p1)
+void path_init(Path *self, V2 p0)
 {
-	self->pts = (V2*)malloc(sizeof(V2) * 2);
-	self->npts = 2;
+	memset(self, 0, sizeof(Path));
+	self->pts = (V2*)malloc(sizeof(V2) * 1024);
+	self->npts = 1;
+	self->pts[0] = p0;
 }
 
-void path_free(Path *path)
+void path_free(Path *self)
 {
-	if (path->pts)
-		free(path->pts);
-	memset(path, 0, sizeof(Path));	
+	if (self->pts)
+		free(self->pts);
+	memset(self, 0, sizeof(Path));	
 }
 
-float path_length(Path *path)
+float path_length(Path *self)
 {
 	float len = 0.0;
-	for (int i=1; i < path->npts; ++i)
-		len += v2dist(path->pts[i], path->pts[-1]);
+	if (self->npts < 2)
+		return 0.0;
+	for (int i=1; i < self->npts; ++i)
+		len += v2dist(self->pts[i], self->pts[-1]);
 	return len;
 }
 
+void path_append(Path *self, V2 pt)
+{
+	self->npts += 1;
+	self->pts = realloc(self->pts, sizeof(V2)*self->npts);
+	self->pts[self->npts-1] = pt;
+}
 
+void path_join(Path *self, Path *other)
+{
+	self->npts += other->npts;
+	self->pts = realloc(self->pts, sizeof(V2)*self->npts);
+	memcpy(&self->pts[self->npts - other->npts], other->pts, sizeof(V2)*other->npts);
+}
+
+void path_copy(Path *self, Path *other)
+{
+	self->npts = other->npts;
+	self->pts = realloc(self->pts, sizeof(V2)*self->npts);
+	memcpy(self->pts, other->pts, sieof(V2)*other->npts);
+}
+
+void path_reverse(Path *self)
+{
+	for (int i=0; i < self->npts / 2; ++i) {
+		V2 tmp = self->pts[i];
+		self->pts[i] = self->pts[self->npts-1-i];
+		self->pts[self->npts-1-i] = tmp;
+	}
+}
+
+
+typedef struct s_Meander Meander;
+struct s_Meander {
+	Path path;
+	V1 d0;
+	V1 d1;
+	V1 d2;
+	V1 d3;
+	V1 d4;
+};
+
+
+void meander_next(Meander *self)
+{
+	path_append(&self->path, v2add(self->path.pts[self->path.npts-1], v2mult(v2dir(self->d0), dt)));
 	
+	
+	
+}
+
+
 	
 #define NHEARTS 8*7
 typedef struct s_Heart Heart;
@@ -122,6 +181,10 @@ void gl_init(void)
 	
 	hearts_random(7.0, 7.0);//(0, 40, 13, &heart_pts[1]);
 	
+	
+	
+	
+	
 }
 
 
@@ -175,30 +238,30 @@ int gl_frame(void)
 	//~ draw_polygon((float[2]){10.0, 0.0}, (float[2]){1.0, 1.0}, 0.0, 14, heart);
 	//~ draw_polygon((float[2]){0.0, 10.0}, (float[2]){1.0, 1.0}, 90.0, 14, heart);
 
-	if (GW.frame % 11 == 0 && state%2) {
-		hearts_random(7.0*5.0, 7.0*5.0);//(0, 40, 13, &heart_pts[1]);
-	}
+	//~ if (GW.frame % 11 == 0 && state%2) {
+		//~ hearts_random(7.0*5.0, 7.0*5.0);//(0, 40, 13, &heart_pts[1]);
+	//~ }
 	
-	if (GW.frame % (59*3) == 0) {
-		state = (state+1)%8;
-		if (state%8 == 0 || state%8 == 4) {
-			hearts_to_path(0, NHEARTS, 13, &heart_pts[1]);
-		} else if (state % 8 == 2) {
-			hearts_to_path(0, NHEARTS, 5, M_pts);
-		} else if (state % 8 == 6) {
-			hearts_to_path(0, NHEARTS/7*6, 4, A0_pts);
-			hearts_to_path(NHEARTS/7*6, NHEARTS/7, 2, A1_pts);
-		}
+	//~ if (GW.frame % (59*3) == 0) {
+		//~ state = (state+1)%8;
+		//~ if (state%8 == 0 || state%8 == 4) {
+			//~ hearts_to_path(0, NHEARTS, 13, &heart_pts[1]);
+		//~ } else if (state % 8 == 2) {
+			//~ hearts_to_path(0, NHEARTS, 5, M_pts);
+		//~ } else if (state % 8 == 6) {
+			//~ hearts_to_path(0, NHEARTS/7*6, 4, A0_pts);
+			//~ hearts_to_path(NHEARTS/7*6, NHEARTS/7, 2, A1_pts);
+		//~ }
 		
 		
 		
-	}
+	//~ }
 	
 	
 
-	draw_color(1.0, 0.3, 0.5, 1.0);
-	update_hearts();
-	draw_hearts();
+	//~ draw_color(1.0, 0.3, 0.5, 1.0);
+	//~ update_hearts();
+	//~ draw_hearts();
 	
 	if (GW.alpha & KALPHA_A)
 		GW.camx -= 10.0;

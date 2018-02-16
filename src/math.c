@@ -20,6 +20,7 @@ V2 v2sub(V2 v0, V2 v1);
 V2 v2add(V2 v0, V2 v1);
 V2 v2norm(V2 v0);
 V2 v2mult(V2 v0, V1 t);
+V2 v2dir(V1 degrees);
 
 
 
@@ -64,6 +65,12 @@ V2 v2norm(V2 v0)
 V2 v2mult(V2 v0, V1 t)
 {
 	return (V2){v0.x*t, v0.y*t};
+}
+
+
+V2 v2dir(V1 degrees)
+{
+	return (V2){cos(M_PI*degrees/180.0), sin(M_PI*degrees/180.0)};
 }
 
 
