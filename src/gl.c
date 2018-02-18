@@ -81,10 +81,21 @@ struct s_Window {
 	int w, h;
 	int fs;
 
-//
-	int x, y;
-	
-	int cx, cy;
+// Cursor
+	struct {
+		int hx, hy;
+		int btn;
+		int edge;
+		int click, release;
+		float x,y;
+		int sx, sy;
+		int sx0, sy0;
+	} m;
+	int scroll;
+	int clicks[MAX_KEY_INPUT_BUF];
+	int releases[MAX_KEY_INPUT_BUF];
+	int releases_i;
+	int clicks_i;
 
 // Keyboard Input
 	char input_chars[MAX_KEY_INPUT_BUF];
@@ -98,6 +109,7 @@ struct s_Window {
 // Render State
 	GLfloat color[4];
 	GLfloat camx, camy;
+	GLfloat camdx, camdy;
 	GLfloat zoomx, zoomy;
 	GLfloat vmat[3][3];
 
@@ -162,6 +174,10 @@ void draw_line_strip(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, G
 void draw_line_loop(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts);
 void draw_lines(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts);
 void draw_polygon(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfloat *pts);
+void draw_circle(GLfloat xy[2], GLfloat scale[2]);
+
+
+
 #endif
 
 #if __INCLUDE_LEVEL__ == 0
@@ -447,28 +463,45 @@ void do_fullscreen(void)
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 {
-	//~ int x = xpos*256.0/GW.w;
-	//~ int y = ypos*144.0/GW.h;
-	//~ x = (x<0)?0 : (x >255?255:x);
-	//~ y = (y<0)?0 : (y >143?143:y);
-	
-	//~ GW.hoverX = xpos;
-	//~ GW.hoverY = ypos;
-	//~ input->touch[0].x = x;
-	//~ input->touch[0].y = y;
+	GW.m.hx = xpos;
+	GW.m.hy = ypos;
+	GW.m.sx = (xpos<0)?0 : (xpos >GW.w?GW.w:xpos);
+	GW.m.sy = (ypos<0)?0 : (ypos>GW.h?GW.h:ypos);
+	GW.m.x = (((xpos)-(GW.w/2.0))- (GW.camx+GW.camdx)/2.0)/GW.zoomx ;
+	GW.m.y = -(ypos-(GW.h/2.0) + (GW.camy+GW.camdy)/2.0)/GW.zoomy ;	
 }
 void cursor_enter_callback(GLFWwindow* window, int entered)
 {
-	//~ if (!entered) {
-		//~ input->hoverX = 255;
-		//~ input->hoverY = 255;
-	//~ }
+	if (!entered) {
+		GW.m.hx = -1;
+		GW.m.hy = -1;
+	}
 }
-
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+	if (action == GLFW_PRESS) {
+		if (!GW.m.btn) { //first press
+			GW.m.sx0 = GW.m.sx;
+			GW.m.sy0 = GW.m.sy;
+		}
+	} 
+	if (action == GLFW_PRESS) {
+		GW.clicks[GW.clicks_i++] = button+1;
+		GW.m.btn |= (1<<button);
+	}else {
+		GW.releases[GW.releases_i++] = button+1;
+		GW.m.btn &= ~(1<<button);
+	}
+}
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	GW.scroll = yoffset;
+}
 static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
 	float monitor_aspect = (16.0/9.0);
-	if (fabs((double)width /height - monitor_aspect) > 0.01) {
+	INFO("Resize %d %d (%.3f)",width, height, (double)width/height - monitor_aspect);
+	if (fabs((double)width /height - monitor_aspect) > 0.1) {
 		//~ printf("BAD");
 		if ((double) width/height > monitor_aspect)
 			width = height*monitor_aspect;
@@ -486,20 +519,6 @@ static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 	}
 }
 
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
-{
-	//~ if (action == GLFW_PRESS) {
-		//~ if (!input->touch[0].buttons) { //first press
-			//~ input->touch[0].x0 = input->touch[0].x;
-			//~ input->touch[0].y0 = input->touch[0].y;
-		//~ }
-	//~ } 
-	//~ if (action == GLFW_PRESS)
-		//~ input->touch[0].buttons |= (1<<button);
-	//~ else
-		//~ input->touch[0].buttons &= ~(1<<button);
-	
-}
 void character_callback(GLFWwindow* window, unsigned int codepoint)
 {	
 	if (codepoint > 0 && codepoint <='~' && GW.input_i < MAX_KEY_INPUT_BUF)
@@ -632,6 +651,48 @@ void draw_polygon(GLfloat xy[2], GLfloat scale[2], GLfloat angle, int npts, GLfl
 {
 	drawl(GL_TRIANGLE_FAN, xy, scale, angle, npts, pts);
 }
+void draw_circle(GLfloat xy[2], GLfloat scale[2])
+{
+	static GLfloat cpts[36*2] = {
+	1.0000000000000000000e+00, 0.0000000000000000000e+00, 
+	9.8480775301220802032e-01, 1.7364817766693033119e-01, 
+	9.3969262078590842791e-01, 3.4202014332566871291e-01, 
+	8.6602540378443870761e-01, 4.9999999999999994449e-01, 
+	7.6604444311897801345e-01, 6.4278760968653925190e-01, 
+	6.4278760968653936292e-01, 7.6604444311897801345e-01, 
+	5.0000000000000011102e-01, 8.6602540378443859659e-01, 
+	3.4202014332566882393e-01, 9.3969262078590831688e-01, 
+	1.7364817766693041445e-01, 9.8480775301220802032e-01, 
+	0.0, 1.0000000000000000000e+00, 
+	-1.7364817766693030343e-01, 9.8480775301220802032e-01, 
+	-3.4202014332566849086e-01, 9.3969262078590842791e-01, 
+	-4.9999999999999977796e-01, 8.6602540378443870761e-01, 
+	-6.4278760968653936292e-01, 7.6604444311897801345e-01, 
+	-7.6604444311897790243e-01, 6.4278760968653947394e-01, 
+	-8.6602540378443848557e-01, 5.0000000000000033307e-01, 
+	-9.3969262078590831688e-01, 3.4202014332566887944e-01, 
+	-9.8480775301220802032e-01, 1.7364817766693027568e-01, 
+	-1.0000000000000000000e+00, 0.0, 
+	-9.8480775301220813134e-01, -1.7364817766693002588e-01, 
+	-9.3969262078590842791e-01, -3.4202014332566865740e-01, 
+	-8.6602540378443859659e-01, -5.0000000000000011102e-01, 
+	-7.6604444311897834652e-01, -6.4278760968653891883e-01, 
+	-6.4278760968653947394e-01, -7.6604444311897790243e-01, 
+	-5.0000000000000044409e-01, -8.6602540378443837454e-01, 
+	-3.4202014332566854637e-01, -9.3969262078590842791e-01, 
+	-1.7364817766693033119e-01, -9.8480775301220802032e-01, 
+	0.0, -1.0000000000000000000e+00, 
+	1.7364817766692997036e-01, -9.8480775301220813134e-01, 
+	3.4202014332566899046e-01, -9.3969262078590831688e-01, 
+	4.9999999999999933387e-01, -8.6602540378443904068e-01, 
+	6.4278760968653925190e-01, -7.6604444311897812447e-01, 
+	7.6604444311897779141e-01, -6.4278760968653958496e-01, 
+	8.6602540378443881863e-01, -4.9999999999999966693e-01, 
+	9.3969262078590842791e-01, -3.4202014332566860189e-01, 
+	9.8480775301220802032e-01, -1.7364817766693038670e-01, };
+	drawl(GL_LINE_LOOP, xy, scale, 0.0, 36, cpts);
+}
+
 #endif
 
 void set_window(GLFWwindow *w)
@@ -645,7 +706,8 @@ void set_window(GLFWwindow *w)
 	glfwSetCursorPosCallback(GW.window, cursor_position_callback);
 	glfwSetCursorEnterCallback(GW.window, cursor_enter_callback);
 	glfwSetMouseButtonCallback(GW.window, mouse_button_callback);
-
+	glfwSetScrollCallback(GW.window, scroll_callback);
+	
 	int width, height;
 	glfwGetFramebufferSize(GW.window, &width, &height);
 	framebuffer_size_callback(GW.window, width, height);
@@ -697,12 +759,16 @@ int main(int argc, char *argv[])
 
 	glfwSetTime (0.0);
 	while(!glfwWindowShouldClose(GW.window)) {
+		GW.scroll = 0;
 		glfwPollEvents();
 		GW.vmat[0][0] = 2.0*GW.zoomx / GW.w;
 		GW.vmat[1][1] = 2.0*GW.zoomy / GW.h;
 		GW.vmat[2][2] = 1.0;
-		GW.vmat[2][0] = GW.camx / GW.w;
-		GW.vmat[2][1] = GW.camy / GW.h;
+		GW.vmat[2][0] = (GW.camx+GW.camdx) / GW.w;
+		GW.vmat[2][1] = (GW.camy+GW.camdy) / GW.h;
+		
+		GW.m.click = GW.clicks_i? GW.clicks[--GW.clicks_i]: 0;
+		GW.m.release = GW.releases_i? GW.releases[--GW.releases_i]: 0;
 		
 		if (!gl_frame())
 			break;
